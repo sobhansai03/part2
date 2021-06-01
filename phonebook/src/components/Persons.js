@@ -2,7 +2,7 @@ import React from "react";
 
 const Persons = ({ persons, searchName }) => {
     return persons.length ? (
-        <ul style={{ listStyle: "none", padding: 0 }}>
+        <ul>
             {persons
                 .filter((person) =>
                     person.name.toLowerCase().includes(searchName.toLowerCase())
