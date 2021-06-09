@@ -1,13 +1,18 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import personService from "./services/persons";
 import Filter from "./components/Filter";
 import PersonForm from "./components/PersonForm";
 import Persons from "./components/Persons";
+import Notification from "./components/Notification";
+import "./index.css";
 
 const App = () => {
     const [persons, setPersons] = useState([]);
     const [newName, setNewName] = useState("");
     const [newNumber, setNewNumber] = useState("");
     const [searchName, setSearchName] = useState("");
+    const [message, setMessage] = useState(null);
+    const [type, setType] = useState("");
 
     const focusName = useRef();
 
@@ -17,26 +22,88 @@ const App = () => {
         focusName.current.focus();
     };
 
+    useEffect(() => {
+        personService.getAll().then(setPersons);
+    }, []);
+
     const addPerson = (event) => {
         event.preventDefault();
-        const alreadyExist = persons.find((person) => person.name === newName);
-        if (!alreadyExist) {
-            const personObject = {
-                name: newName,
-                number: newNumber,
-            };
 
-            setPersons(persons.concat(personObject));
-            setNewName("");
-            setNewNumber("");
+        const existingPerson = persons.find(
+            (person) => person.name === newName
+        );
+
+        if (existingPerson) {
+            window.confirm(
+                `${newName} is already added to phonebook, replace the old number with a new one?`
+            ) &&
+                personService
+                    .update(existingPerson.id, { number: newNumber })
+                    .then((updatedPerson) => {
+                        setPersons(
+                            persons.map((person) =>
+                                person.id === updatedPerson.id
+                                    ? updatedPerson
+                                    : person
+                            )
+                        );
+
+                        setMessage(`Updated ${newName}'s number`);
+                        setType("info");
+
+                        clearInput();
+                    })
+                    .catch((error) => {
+                        if (error.name === "TypeError") {
+                            setMessage(
+                                `Information of ${newName} has already been deleted`
+                            );
+                            setPersons(
+                                persons.filter(
+                                    (person) => person.id !== existingPerson.id
+                                )
+                            );
+                        } else {
+                            setMessage(error.response.data.error);
+                        }
+
+                        setType("error");
+                    });
         } else {
-            return alert(newName + " is already added to the phonebook");
+            personService
+                .create(newName, newNumber)
+                .then((newPerson) => {
+                    setPersons(persons.concat(newPerson));
+                    setMessage(`Added ${newName}`);
+                    setType("info");
+                    clearInput();
+                })
+                .catch((error) => {
+                    setMessage(error.response.data.error);
+                    setType("error");
+                });
+        }
+    };
+
+    const deletePerson = (id, name) => {
+        if (window.confirm(`Delete ${name}?`)) {
+            personService.remove(id).then(() => {
+                setPersons(persons.filter((person) => person.id !== id));
+                setMessage(`Deleted ${name}`);
+                setType("info");
+            });
         }
     };
 
     return (
         <div>
             <h2>Phonebook</h2>
+            <Notification
+                message={message}
+                type={type}
+                setMessage={setMessage}
+                setType={setType}
+            />
             <Filter searchName={searchName} setSearchName={setSearchName} />
 
             <h3>Add a new</h3>
@@ -50,7 +117,11 @@ const App = () => {
             />
 
             <h3>Numbers</h3>
-            <Persons persons={persons} searchName={searchName} />
+            <Persons
+                persons={persons}
+                searchName={searchName}
+                deletePerson={deletePerson}
+            />
         </div>
     );
 };
